@@ -1,8 +1,6 @@
 import streamlit as st
 import webcolors
-from colormath.color_objects import LabColor, sRGBColor
-from colormath.color_conversions import convert_color
-from colormath.color_utils import get_complementary_color
+import colorsys # Python 표준 라이브러리 추가
 
 # ----------------------------
 # CSS/HTML 스타일 정의
@@ -40,33 +38,35 @@ def is_light_color(hex_code):
     return luminance > 0.55 # 0.55를 기준으로 밝거나 어둡다고 판단
 
 # ----------------------------
-# 색상 계산 로직
+# 색상 계산 로직 (colorsys 사용)
 # ----------------------------
-def get_complementary_hex(hex_code):
-    """HEX 코드를 입력받아 보색의 HEX 코드를 반환합니다."""
+def get_complementary_hex_simple(hex_code):
+    """HEX 코드를 입력받아 colorsys를 사용해 보색의 HEX 코드를 반환합니다."""
     
-    # 1. webcolors로 HEX를 RGB 튜플로 변환 (0-255)
+    # 1. HEX를 RGB (0-255)로 변환
     rgb_255 = webcolors.hex_to_rgb(hex_code)
     
-    # 2. sRGBColor 객체 생성 (colormath는 0-1.0 또는 0-255를 사용)
-    rgb_obj = sRGBColor(rgb_255.red, rgb_255.green, rgb_255.blue, is_int=True)
+    # 2. RGB (0-1.0)로 정규화
+    r, g, b = rgb_255.red / 255.0, rgb_255.green / 255.0, rgb_255.blue / 255.0
     
-    # 3. 보색 계산
-    # colormath의 get_complementary_color는 RGB, HSV, Lab 등 다양한 색 공간에서 보색을 찾음
-    complementary_obj = get_complementary_color(rgb_obj)
+    # 3. RGB를 HSV (Hue, Saturation, Value)로 변환
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
     
-    # 4. 결과를 sRGB (HEX 표현 가능 형식)로 변환
-    # LabColor로 변환 후 다시 sRGB로 오는 것이 더 정확한 색 공간에서의 '보색'이 될 수 있음
-    lab_color = convert_color(rgb_obj, LabColor)
-    complementary_lab = get_complementary_color(lab_color)
+    # 4. 보색 계산: Hue (H) 값에 0.5 (180도)를 더하거나 빼서 반대편으로 이동
+    h_comp = (h + 0.5) % 1.0 # 0.0 ~ 1.0 범위 유지
     
-    # 결과 Lab 색상을 다시 sRGB (0-255)로 변환
-    complementary_rgb = convert_color(complementary_lab, sRGBColor)
+    # 5. HSV를 다시 RGB (0-1.0)로 변환
+    r_comp, g_comp, b_comp = colorsys.hsv_to_rgb(h_comp, s, v)
     
-    # 5. HEX 코드로 최종 변환
-    comp_hex = webcolors.rgb_to_hex(
-        (int(complementary_rgb.rgb_r), int(complementary_rgb.rgb_g), int(complementary_rgb.rgb_b))
+    # 6. RGB (0-255)로 되돌림
+    rgb_255_comp = (
+        int(round(r_comp * 255)),
+        int(round(g_comp * 255)),
+        int(round(b_comp * 255))
     )
+    
+    # 7. 최종 HEX 코드로 변환
+    comp_hex = webcolors.rgb_to_hex(rgb_255_comp)
     
     return comp_hex
 
@@ -80,6 +80,10 @@ def main():
     
     st.markdown("""
         **HEX 코드**를 입력하여 그 색상과 **보색(Complementary Color)** 관계에 있는 색상을 확인하세요.
+        보색은 색상환에서 180도 반대편에 위치하는 색으로, 가장 강한 대비를 이룹니다. 
+
+[Image of color wheel with 180 degree rotation for complementary color]
+
         (예: `#4682B4` - 스틸 블루, `#FF5733` - 주황)
     """)
     
@@ -102,8 +106,8 @@ def main():
                 
                 st.subheader("결과")
                 
-                # 3. 보색 계산
-                comp_hex = get_complementary_hex(clean_hex)
+                # 3. 보색 계산 (수정된 colorsys 함수 사용)
+                comp_hex = get_complementary_hex_simple(clean_hex)
                 
                 # 4. 시각화 (두 열 사용)
                 col1, col2 = st.columns(2)
@@ -117,7 +121,7 @@ def main():
                     st.markdown(get_color_box_html(comp_hex, "Complementary"), unsafe_allow_html=True)
                     
                 st.markdown("---")
-                st.success(f"입력 색상 **{clean_hex}**의 보색은 **{comp_hex}**입니다.")
+                st.success(f"입력 색상 **{clean_hex}**의 보색은 **{comp_hex}**입니다. 이는 색상환에서 정확히 반대에 위치하여 강한 대비를 이룹니다.")
                 
             except ValueError:
                 st.error("⚠️ 유효하지 않은 HEX 코드 형식입니다. `#RRGGBB` 형식으로 입력해 주세요.")
